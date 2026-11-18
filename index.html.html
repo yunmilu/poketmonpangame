@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>포켓몬 200층 배틀 타워 (1~4세대)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+KR:wght@400;700&display=swap');
+
+  * { box-sizing: border-box; user-select: none; }
+  body {
+    background-color: #1a1a2e;
+    color: #fff;
+    font-family: 'Noto Sans KR', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+  }
+  #game-container {
+    width: 800px;
+    background: #16213e;
+    border: 4px solid #e94560;
+    border-radius: 12px;
+    box-shadow: 0 0 25px rgba(233, 69, 96, 0.4);
+    overflow: hidden;
+  }
+  header {
+    background: #0f3460;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid #e94560;
+  }
+  .wave-badge {
+    background: #e94560;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 16px;
+  }
+  .boss-alert {
+    background: #f39c12;
+    color: #000;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  /* 화면 전환용 */
+  .screen { display: none; padding: 20px; }
+  .screen.active { display: block; }
+
+  /* 계정 로그인/생성 화면 스타일 */
+  #auth-screen { text-align: center; padding: 40px 20px; }
+  .auth-box {
+    background: #0f3460;
+    border: 2px solid #533483;
+    padding: 30px;
+    border-radius: 10px;
+    display: inline-block;
+    width: 400px;
+  }
+  .auth-box input {
+    width: 100%;
+    padding: 12px;
+    margin: 15px 0;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+    text-align: center;
+  }
+  .auth-box button {
+    width: 100%;
+    background: #e94560;
+    color: white;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  /* 스타팅 선택 화면 */
+  .starter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .starter-card {
+    background: #0f3460;
+    border: 2px solid #533483;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .starter-card.locked {
+    background: #111827;
+    border-color: #374151;
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .starter-card:hover:not(.locked) {
+    border-color: #e94560;
+    transform: translateY(-3px);
+  }
+  .starter-card img {
+    width: 80px;
+    height: 80px;
+    image-rendering: pixelated;
+  }
+
+  /* 배틀 필드 */
+  #battle-field {
+    position: relative;
+    height: 320px;
+    background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 55%, #7ec850 55%, #567d46 100%);
+    border-radius: 8px;
+    border: 3px solid #333;
+    overflow: hidden;
+    color: #000;
+  }
+  .status-box {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.92);
+    border: 3px solid #2c3e50;
+    border-radius: 8px;
+    padding: 8px 12px;
+    width: 260px;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.3);
+  }
+  #enemy-status { top: 20px; left: 20px; }
+  #player-status { bottom: 20px; right: 20px; }
+
+  .poke-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .types { display: flex; gap: 4px; margin-bottom: 5px; }
+  .type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+  }
+  .hp-bar-bg {
+    width: 100%;
+    height: 10px;
+    background: #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  .hp-bar {
+    height: 100%;
+    background: #2ecc71;
+    width: 100%;
+    transition: width 0.3s, background-color 0.3s;
+  }
+  .exp-bar-bg {
+    width: 100%;
+    height: 5px;
+    background: #ddd;
+    margin-top: 4px;
+  }
+  .exp-bar {
+    height: 100%;
+    background: #3498db;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .sprite {
+    position: absolute;
+    width: 140px;
+    height: 140px;
+    image-rendering: pixelated;
+    transition: transform 0.1s;
+  }
+  #enemy-sprite { top: 45px; right: 70px; }
+  #player-sprite { bottom: 15px; left: 70px; transform: scale(1.2); }
+
+  /* 로그 및 컨트롤 */
+  #log-box {
+    background: #0f3460;
+    border: 2px solid #533483;
+    border-radius: 8px;
+    height: 110px;
+    margin-top: 12px;
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .moves-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  button {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.15s;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .move-btn {
+    color: #fff;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(255,255,255,0.2);
+  }
+  .move-btn:hover:not(:disabled) { filter: brightness(1.15); }
+  .action-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .btn-heal { background: #27ae60; color: white; padding: 8px; }
+  .btn-ball { background: #e74c3c; color: white; padding: 8px; }
+  .btn-party { background: #8e44ad; color: white; padding: 8px; }
+  .btn-save { background: #2980b9; color: white; font-size: 12px; padding: 6px; }
+  .btn-home { background: #c0392b; color: white; font-size: 12px; padding: 6px; }
+
+  /* 모달 */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  .modal-content {
+    background: #16213e;
+    border: 3px solid #e94560;
+    padding: 20px;
+    border-radius: 10px;
+    width: 420px;
+    text-align: center;
+  }
+  .modal-list { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <header>
+    <div><strong>POKÉMON TOWER 200</strong> <span id="user-display" style="font-size:12px; color:#f1c40f; margin-left:10px;"></span></div>
+    <div id="wave-display" class="wave-badge">준비 중</div>
+    <div id="money-display">소지금: 3000원</div>
+  </header>
+
+  <!-- 0. 계정 로그인/생성 화면 -->
+  <div id="auth-screen" class="screen active">
+    <div class="auth-box">
+      <h2>포켓몬 트레이너 등록</h2>
+      <p style="font-size:13px; color:#ccc;">닉네임을 입력하여 계정을 만들거나 불러오세요.</p>
+      <input type="text" id="username-input" placeholder="트레이너 닉네임 입력" maxlength="12">
+      <button onclick="loginUser()">모험 시작하기 / 이어하기</button>
+    </div>
+  </div>
+
+  <!-- 1. 스타팅 선택 화면 -->
+  <div id="starter-screen" class="screen">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">파트너 포켓몬 선택</h2>
+      <button onclick="logoutUser()" style="background:#c0392b; color:#fff; padding:6px 12px; font-size:12px;">계정 변경</button>
+    </div>
+    <p style="font-size:13px; color:#ccc; margin-top:8px;">잡은 포켓몬은 다음 판 스타팅으로 해제됩니다. 저장된 세이브가 있다면 이어할 수 있습니다!</p>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+      <button onclick="startNewRun()" style="background:#27ae60; color:#fff; flex:1; padding:8px;">새 게임 시작 (1층부터)</button>
+      <button id="btn-continue" onclick="continueGame()" style="background:#f39c12; color:#000; flex:1; padding:8px; display:none;">이어서 하기 (<span id="saved-wave-text">0</span>층)</button>
+    </div>
+    <div class="starter-grid" id="starter-list"></div>
+  </div>
+
+  <!-- 2. 배틀 화면 -->
+  <div id="battle-screen" class="screen">
+    <div id="battle-field">
+      <!-- 적 상태창 -->
+      <div id="enemy-status" class="status-box">
+        <div class="poke-header">
+          <span id="enemy-name">이름</span>
+          <span id="enemy-lv">Lv.5</span>
+        </div>
+        <div class="types" id="enemy-types"></div>
+        <div class="hp-bar-bg"><div id="enemy-hp-bar" class="hp-bar"></div></div>
+        <div style="font-size:11px; text-align:right; margin-top:2px;" id="enemy-hp-text">20/20</div>
+      </div>
+      <img id="enemy-sprite" class="sprite" src="" alt="enemy">
+
+      <!-- 내 포켓몬 상태창 -->
+      <div id="player-status" class="status-box">
+        <div class="poke-header">
+          <span id="player-name">이름</span>
+          <span id="player-lv">Lv.5</span>
+        </div>
+        <div class="types" id="player-types"></div>
+        <div class="hp-bar-bg"><div id="player-hp-bar" class="hp-bar"></div></div>
+        <div style="font-size:11px; display:flex; justify-content:space-between; margin-top:2px;">
+          <span>EXP</span>
+          <span id="player-hp-text">20/20</span>
+        </div>
+        <div class="exp-bar-bg"><div id="player-exp-bar" class="exp-bar"></div></div>
+      </div>
+      <img id="player-sprite" class="sprite" src="" alt="player">
+    </div>
+
+    <div id="log-box"></div>
+
+    <div class="controls">
+      <div class="moves-grid" id="moves-container"></div>
+      <div class="action-panel">
+        <button class="btn-heal" onclick="usePotion()">상처약 (500원 / HP 50%)</button>
+        <button class="btn-ball" id="btn-catch" onclick="throwPokeball()">몬스터볼 (300원)</button>
+        <button class="btn-party" onclick="openPartyModal(false)">교체 (<span id="party-count">1</span>/6)</button>
+        <button class="btn-save" onclick="manualSave()">게임 수동 저장</button>
+        <button class="btn-home" onclick="goToHome()">처음 화면으로 (로그아웃)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 기술 습득 / 포켓몬 교체 모달 -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <h3 id="modal-title">제목</h3>
+    <p id="modal-desc" style="font-size:13px;"></p>
+    <div class="modal-list" id="modal-list"></div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// 1. 타입 상성표 및 데이터베이스
+// ==========================================
+const TYPE_COLORS = {
+  '노말': '#A8A77A', '불꽃': '#EE8130', '물': '#6390F0', '풀': '#7AC74C',
+  '전기': '#F7D02C', '얼음': '#96D9D6', '격투': '#C22E28', '독': '#A33EA1',
+  '땅': '#E2BF65', '비행': '#A98FF3', '에스퍼': '#F95587', '벌레': '#A6B91A',
+  '바위': '#B6A136', '고스트': '#735797', '드래곤': '#6F35FC', '악': '#705746',
+  '강철': '#B7B7CE'
+};
+
+const TYPE_CHART = {
+  '노말': { '바위': 0.5, '고스트': 0, '강철': 0.5 },
+  '불꽃': { '불꽃': 0.5, '물': 0.5, '풀': 2, '얼음': 2, '벌레': 2, '바위': 0.5, '드래곤': 0.5, '강철': 2 },
+  '물': { '불꽃': 2, '물': 0.5, '풀': 0.5, '땅': 2, '바위': 2, '드래곤': 0.5 },
+  '풀': { '불꽃': 0.5, '물': 2, '풀': 0.5, '독': 0.5, '땅': 2, '비행': 0.5, '벌레': 0.5, '바위': 2, '드래곤': 0.5, '강철': 0.5 },
+  '전기': { '물': 2, '풀': 0.5, '전기': 0.5, '땅': 0, '비행': 2, '드래곤': 0.5 },
+  '얼음': { '불꽃': 0.5, '물': 0.5, '풀': 2, '얼음': 0.5, '땅': 2, '비행': 2, '드래곤': 2, '강철': 0.5 },
+  '격투': { '노말': 2, '얼음': 2, '독': 0.5, '비행': 0.5, '에스퍼': 0.5, '벌레': 0.5, '바위': 2, '고스트': 0, '악': 2, '강철': 2 },
+  '독': { '풀': 2, '독': 0.5, '땅': 0.5, '바위': 0.5, '고스트': 0.5, '강철': 0 },
+  '땅': { '불꽃': 2, '풀': 0.5, '전기': 2, '독': 2, '비행': 0, '벌레': 0.5, '바위': 2, '강철': 2 },
+  '비행': { '풀': 2, '전기': 0.5, '격투': 2, '벌레': 2, '바위': 0.5, '강철': 0.5 },
+  '에스퍼': { '격투': 2, '독': 2, '에스퍼': 0.5, '악': 0, '강철': 0.5 },
+  '벌레': { '불꽃': 0.5, '풀': 2, '격투': 0.5, '독': 0.5, '비행': 0.5, '에스퍼': 2, '고스트': 0.5, '악': 2, '강철': 0.5 },
+  '바위': { '불꽃': 2, '얼음': 2, '격투': 0.5, '땅': 0.5, '비행': 2, '벌레': 2, '강철': 0.5 },
+  '고스트': { '노말': 0, '에스퍼': 2, '고스트': 2, '악': 0.5, '강철': 0.5 },
+  '드래곤': { '드래곤': 2, '강철': 0.5 },
+  '악': { '격투': 0.5, '에스퍼': 2, '고스트': 2, '악': 0.5, '강철': 0.5 },
+  '강철': { '불꽃': 0.5, '물': 0.5, '전기': 0.5, '얼음': 2, '바위': 2, '강철': 0.5 }
+};
+
+function getTypeEffectiveness(moveType, defTypes) {
+  let mult = 1;
+  for (const dt of defTypes) {
+    if (TYPE_CHART[moveType] && TYPE_CHART[moveType][dt] !== undefined) {
+      mult *= TYPE_CHART[moveType][dt];
+    }
+  }
+  return mult;
+}
+
+const MOVES = {
+  '몸통박치기': { type: '노말', cat: '물리', power: 40, acc: 100 },
+  '할퀴기': { type: '노말', cat: '물리', power: 40, acc: 100 },
+  '전광석화': { type: '노말', cat: '물리', power: 40, acc: 100 },
+  '베어가르기': { type: '노말', cat: '물리', power: 70, acc: 100 },
+  '누르기': { type: '노말', cat: '물리', power: 85, acc: 100 },
+  '이판사판태클': { type: '노말', cat: '물리', power: 120, acc: 100 },
+  '파괴광선': { type: '노말', cat: '특수', power: 150, acc: 90 },
+  '신속': { type: '노말', cat: '물리', power: 80, acc: 100 },
+  '불꽃세례': { type: '불꽃', cat: '특수', power: 40, acc: 100 },
+  '화염자동차': { type: '불꽃', cat: '물리', power: 60, acc: 100 },
+  '불꽃엄니': { type: '불꽃', cat: '물리', power: 65, acc: 95 },
+  '화염방사': { type: '불꽃', cat: '특수', power: 95, acc: 100 },
+  '플레어드라이브': { type: '불꽃', cat: '물리', power: 120, acc: 100 },
+  '불대문자': { type: '불꽃', cat: '특수', power: 120, acc: 85 },
+  '물대포': { type: '물', cat: '특수', power: 40, acc: 100 },
+  '거품광선': { type: '물', cat: '특수', power: 65, acc: 100 },
+  '아쿠아제트': { type: '물', cat: '물리', power: 40, acc: 100 },
+  '파도타기': { type: '물', cat: '특수', power: 95, acc: 100 },
+  '폭포오르기': { type: '물', cat: '물리', power: 80, acc: 100 },
+  '아쿠아테일': { type: '물', cat: '물리', power: 90, acc: 90 },
+  '하이드로펌프': { type: '물', cat: '특수', power: 120, acc: 80 },
+  '공간절단': { type: '드래곤', cat: '특수', power: 100, acc: 95 },
+  '덩굴채찍': { type: '풀', cat: '물리', power: 35, acc: 100 },
+  '잎날가르기': { type: '풀', cat: '물리', power: 55, acc: 95 },
+  '기가드레인': { type: '풀', cat: '특수', power: 60, acc: 100 },
+  '에너지볼': { type: '풀', cat: '특수', power: 80, acc: 100 },
+  '리프블레이드': { type: '풀', cat: '물리', power: 90, acc: 100 },
+  '솔라빔': { type: '풀', cat: '특수', power: 120, acc: 100 },
+  '리프스톰': { type: '풀', cat: '특수', power: 140, acc: 90 },
+  '전기쇼크': { type: '전기', cat: '특수', power: 40, acc: 100 },
+  '스파크': { type: '전기', cat: '물리', power: 65, acc: 100 },
+  '10만볼트': { type: '전기', cat: '특수', power: 95, acc: 100 },
+  '번개엄니': { type: '전기', cat: '물리', power: 65, acc: 95 },
+  '번개': { type: '전기', cat: '특수', power: 120, acc: 70 },
+  '볼트태클': { type: '전기', cat: '물리', power: 120, acc: 100 },
+  '얼음뭉치': { type: '얼음', cat: '물리', power: 40, acc: 100 },
+  '얼음엄니': { type: '얼음', cat: '물리', power: 65, acc: 95 },
+  '냉동빔': { type: '얼음', cat: '특수', power: 95, acc: 100 },
+  '눈보라': { type: '얼음', cat: '특수', power: 120, acc: 70 },
+  '두번치기': { type: '격투', cat: '물리', power: 30, acc: 100 },
+  '마하펀치': { type: '격투', cat: '물리', power: 40, acc: 100 },
+  '깨트리다': { type: '격투', cat: '물리', power: 75, acc: 100 },
+  '인파이트': { type: '격투', cat: '물리', power: 120, acc: 100 },
+  '파동탄': { type: '격투', cat: '특수', power: 90, acc: 100 },
+  '용해액': { type: '독', cat: '특수', power: 40, acc: 100 },
+  '오물폭탄': { type: '독', cat: '특수', power: 90, acc: 100 },
+  '독찌르기': { type: '독', cat: '물리', power: 80, acc: 100 },
+  '진흙뿌리기': { type: '땅', cat: '특수', power: 20, acc: 100 },
+  '구멍파기': { type: '땅', cat: '물리', power: 80, acc: 100 },
+  '대지의힘': { type: '땅', cat: '특수', power: 90, acc: 100 },
+  '지진': { type: '땅', cat: '물리', power: 100, acc: 100 },
+  '바람일으키기': { type: '비행', cat: '특수', power: 40, acc: 100 },
+  '제비반환': { type: '비행', cat: '물리', power: 60, acc: 100 },
+  '에어슬래시': { type: '비행', cat: '특수', power: 75, acc: 95 },
+  '브레이브버드': { type: '비행', cat: '물리', power: 120, acc: 100 },
+  '염동력': { type: '에스퍼', cat: '특수', power: 50, acc: 100 },
+  '환상빔': { type: '에스퍼', cat: '특수', power: 65, acc: 100 },
+  '사이코커터': { type: '에스퍼', cat: '물리', power: 70, acc: 100 },
+  '사이코키네시스': { type: '에스퍼', cat: '특수', power: 90, acc: 100 },
+  '시저크로스': { type: '벌레', cat: '물리', power: 80, acc: 100 },
+  '벌레의야단법석': { type: '벌레', cat: '특수', power: 90, acc: 100 },
+  '돌떨구기': { type: '바위', cat: '물리', power: 50, acc: 90 },
+  '스톤샤워': { type: '바위', cat: '물리', power: 75, acc: 90 },
+  '스톤에지': { type: '바위', cat: '물리', power: 100, acc: 80 },
+  '섀도펀치': { type: '고스트', cat: '물리', power: 60, acc: 100 },
+  '섀도크루': { type: '고스트', cat: '물리', power: 70, acc: 100 },
+  '섀도볼': { type: '고스트', cat: '특수', power: 80, acc: 100 },
+  '섀도다이브': { type: '고스트', cat: '물리', power: 120, acc: 100 },
+  '용의숨결': { type: '드래곤', cat: '특수', power: 60, acc: 100 },
+  '드래곤크루': { type: '드래곤', cat: '물리', power: 80, acc: 100 },
+  '용의파동': { type: '드래곤', cat: '특수', power: 90, acc: 100 },
+  '역린': { type: '드래곤', cat: '물리', power: 120, acc: 100 },
+  '시간의포효': { type: '드래곤', cat: '특수', power: 150, acc: 90 },
+  '물기': { type: '악', cat: '물리', power: 60, acc: 100 },
+  '깨물어부수기': { type: '악', cat: '물리', power: 80, acc: 100 },
+  '기습': { type: '악', cat: '물리', power: 80, acc: 100 },
+  '악의파동': { type: '악', cat: '특수', power: 80, acc: 100 },
+  '메탈크로우': { type: '강철', cat: '물리', power: 50, acc: 95 },
+  '아이언테일': { type: '강철', cat: '물리', power: 100, acc: 75 },
+  '아이언헤드': { type: '강철', cat: '물리', power: 80, acc: 100 },
+  '러스터캐논': { type: '강철', cat: '특수', power: 80, acc: 100 },
+  '코멧펀치': { type: '강철', cat: '물리', power: 100, acc: 85 }
+};
+
+const POKEDEX = {
+  3: { name: '이상해꽃', gen: 1, types: ['풀', '독'], starter: true, stats: { hp: 80, atk: 82, def: 83, spa: 100, spd: 100, spe: 80 }, learnset: { 1: ['몸통박치기', '덩굴채찍'], 10: ['잎날가르기'], 20: ['기가드레인'], 32: ['오물폭탄'], 45: ['솔라빔'] } },
+  6: { name: '리자몽', gen: 1, types: ['불꽃', '비행'], starter: true, stats: { hp: 78, atk: 84, def: 78, spa: 109, spd: 85, spe: 100 }, learnset: { 1: ['할퀴기', '불꽃세례'], 12: ['메탈크로우'], 24: ['화염방사'], 36: ['에어슬래시'], 48: ['플레어드라이브'] } },
+  9: { name: '거북왕', gen: 1, types: ['물'], starter: true, stats: { hp: 79, atk: 83, def: 100, spa: 85, spd: 105, spe: 78 }, learnset: { 1: ['몸통박치기', '물대포'], 12: ['물기'], 24: ['파도타기'], 36: ['냉동빔'], 48: ['하이드로펌프'] } },
+  25: { name: '피카츄', gen: 1, types: ['전기'], starter: true, stats: { hp: 35, atk: 55, def: 40, spa: 50, spd: 50, spe: 90 }, learnset: { 1: ['전기쇼크', '전광석화'], 15: ['스파크'], 26: ['10만볼트'], 37: ['아이언테일'], 50: ['볼트태클'] } },
+  59: { name: '윈디', gen: 1, types: ['불꽃'], stats: { hp: 90, atk: 110, def: 80, spa: 100, spd: 80, spe: 95 }, learnset: { 1: ['물기', '불꽃엄니'], 25: ['화염방사'], 39: ['신속'], 50: ['플레어드라이브'] } },
+  65: { name: '후딘', gen: 1, types: ['에스퍼'], stats: { hp: 55, atk: 50, def: 45, spa: 135, spd: 95, spe: 120 }, learnset: { 1: ['염동력'], 16: ['환상빔'], 30: ['사이코키네시스'], 42: ['섀도볼'], 50: ['에너지볼'] } },
+  68: { name: '괴력몬', gen: 1, types: ['격투'], stats: { hp: 90, atk: 130, def: 80, spa: 65, spd: 85, spe: 55 }, learnset: { 1: ['두번치기'], 18: ['깨트리다'], 32: ['스톤샤워'], 44: ['인파이트'] } },
+  94: { name: '팬텀', gen: 1, types: ['고스트', '독'], stats: { hp: 60, atk: 65, def: 60, spa: 130, spd: 75, spe: 110 }, learnset: { 1: ['섀도펀치'], 22: ['기습'], 33: ['섀도볼'], 44: ['오물폭탄'], 55: ['악의파동'] } },
+  130: { name: '갸라도스', gen: 1, types: ['물', '비행'], stats: { hp: 95, atk: 125, def: 79, spa: 60, spd: 100, spe: 81 }, learnset: { 1: ['물기'], 20: ['얼음엄니'], 30: ['아쿠아테일'], 40: ['깨물어부수기'], 50: ['지진'] } },
+  143: { name: '잠만보', gen: 1, types: ['노말'], stats: { hp: 160, atk: 110, def: 65, spa: 65, spd: 110, spe: 30 }, learnset: { 1: ['몸통박치기'], 20: ['누르기'], 35: ['깨물어부수기'], 45: ['지진'], 55: ['이판사판태클'] } },
+  149: { name: '망나뇽', gen: 1, types: ['드래곤', '비행'], boss: true, stats: { hp: 91, atk: 134, def: 95, spa: 100, spd: 100, spe: 80 }, learnset: { 1: ['용의숨결', '아쿠아제트'], 25: ['제비반환'], 40: ['드래곤크루'], 55: ['역린'] } },
+  150: { name: '뮤츠', gen: 1, types: ['에스퍼'], boss: true, stats: { hp: 106, atk: 110, def: 90, spa: 154, spd: 90, spe: 130 }, learnset: { 1: ['염동력'], 30: ['사이코커터'], 50: ['사이코키네시스'], 70: ['파동탄'] } },
+  154: { name: '메가니움', gen: 2, types: ['풀'], starter: true, stats: { hp: 80, atk: 82, def: 100, spa: 83, spd: 100, spe: 80 }, learnset: { 1: ['몸통박치기', '잎날가르기'], 20: ['기가드레인'], 34: ['누르기'], 46: ['솔라빔'] } },
+  157: { name: '블레이범', gen: 2, types: ['불꽃'], starter: true, stats: { hp: 78, atk: 84, def: 78, spa: 109, spd: 85, spe: 100 }, learnset: { 1: ['몸통박치기', '불꽃세례'], 15: ['화염자동차'], 30: ['화염방사'], 48: ['불대문자'] } },
+  160: { name: '장크로다일', gen: 2, types: ['물'], starter: true, stats: { hp: 85, atk: 105, def: 100, spa: 79, spd: 83, spe: 78 }, learnset: { 1: ['할퀴기', '물대포'], 15: ['물기'], 24: ['얼음엄니'], 35: ['깨물어부수기'], 48: ['아쿠아테일'] } },
+  196: { name: '에브이', gen: 2, types: ['에스퍼'], stats: { hp: 65, atk: 65, def: 60, spa: 130, spd: 95, spe: 110 }, learnset: { 1: ['몸통박치기', '전광석화'], 15: ['염동력'], 25: ['환상빔'], 36: ['사이코키네시스'], 45: ['섀도볼'] } },
+  197: { name: '블래키', gen: 2, types: ['악'], stats: { hp: 95, atk: 65, def: 110, spa: 60, spd: 130, spe: 65 }, learnset: { 1: ['몸통박치기', '전광석화'], 15: ['물기'], 28: ['기습'], 36: ['악의파동'], 45: ['이판사판태클'] } },
+  212: { name: '핫삼', gen: 2, types: ['벌레', '강철'], stats: { hp: 70, atk: 130, def: 100, spa: 55, spd: 80, spe: 65 }, learnset: { 1: ['전광석화', '메탈크로우'], 25: ['제비반환'], 35: ['시저크로스'], 45: ['아이언헤드'] } },
+  248: { name: '마기라스', gen: 2, types: ['바위', '악'], boss: true, stats: { hp: 100, atk: 134, def: 110, spa: 95, spd: 100, spe: 61 }, learnset: { 1: ['물기', '돌떨구기'], 28: ['스톤샤워'], 40: ['깨물어부수기'], 52: ['스톤에지'], 60: ['지진'] } },
+  249: { name: '루기아', gen: 2, types: ['에스퍼', '비행'], boss: true, stats: { hp: 106, atk: 90, def: 130, spa: 90, spd: 154, spe: 110 }, learnset: { 1: ['바람일으키기'], 30: ['용의파동'], 50: ['에어슬래시'], 70: ['하이드로펌프'] } },
+  250: { name: '칠색조', gen: 2, types: ['불꽃', '비행'], boss: true, stats: { hp: 106, atk: 130, def: 90, spa: 110, spd: 154, spe: 90 }, learnset: { 1: ['바람일으키기'], 30: ['화염방사'], 50: ['브레이브버드'], 70: ['불대문자'] } },
+  254: { name: '나무킹', gen: 3, types: ['풀'], starter: true, stats: { hp: 70, atk: 85, def: 65, spa: 105, spd: 85, spe: 120 }, learnset: { 1: ['몸통박치기', '전광석화'], 16: ['기가드레인'], 29: ['리프블레이드'], 42: ['시저크로스'], 55: ['리프스톰'] } },
+  257: { name: '번치코', gen: 3, types: ['불꽃', '격투'], starter: true, stats: { hp: 80, atk: 120, def: 70, spa: 110, spd: 70, spe: 80 }, learnset: { 1: ['할퀴기', '불꽃세례'], 16: ['두번치기'], 32: ['화염방사'], 45: ['브레이브버드'], 55: ['플레어드라이브'] } },
+  260: { name: '대짱이', gen: 3, types: ['물', '땅'], starter: true, stats: { hp: 100, atk: 110, def: 90, spa: 85, spd: 90, spe: 60 }, learnset: { 1: ['몸통박치기', '물대포'], 16: ['진흙뿌리기'], 30: ['파도타기'], 42: ['지진'], 52: ['하이드로펌프'] } },
+  282: { name: '가디안', gen: 3, types: ['에스퍼'], stats: { hp: 68, atk: 65, def: 65, spa: 125, spd: 115, spe: 80 }, learnset: { 1: ['염동력'], 20: ['환상빔'], 33: ['사이코키네시스'], 45: ['10만볼트'] } },
+  306: { name: '보스로라', gen: 3, types: ['강철', '바위'], stats: { hp: 70, atk: 110, def: 180, spa: 60, spd: 60, spe: 50 }, learnset: { 1: ['몸통박치기', '메탈크로우'], 25: ['아이언헤드'], 38: ['스톤샤워'], 50: ['이판사판태클'] } },
+  373: { name: '보만다', gen: 3, types: ['드래곤', '비행'], boss: true, stats: { hp: 95, atk: 135, def: 80, spa: 110, spd: 80, spe: 100 }, learnset: { 1: ['물기', '용의숨결'], 30: ['불꽃엄니'], 42: ['드래곤크루'], 55: ['이판사판태클'] } },
+  376: { name: '메타그로스', gen: 3, types: ['강철', '에스퍼'], boss: true, stats: { hp: 80, atk: 135, def: 130, spa: 95, spd: 90, spe: 70 }, learnset: { 1: ['메탈크로우', '염동력'], 32: ['아이언헤드'], 44: ['코멧펀치'], 55: ['지진'] } },
+  382: { name: '가이오가', gen: 3, types: ['물'], boss: true, stats: { hp: 100, atk: 100, def: 90, spa: 150, spd: 140, spe: 90 }, learnset: { 1: ['거품광선'], 35: ['냉동빔'], 55: ['파도타기'], 75: ['하이드로펌프'] } },
+  383: { name: '그란돈', gen: 3, types: ['땅'], boss: true, stats: { hp: 100, atk: 150, def: 140, spa: 100, spd: 90, spe: 90 }, learnset: { 1: ['돌떨구기'], 35: ['불대문자'], 55: ['지진'], 75: ['솔라빔'] } },
+  384: { name: '레쿠쟈', gen: 3, types: ['드래곤', '비행'], boss: true, stats: { hp: 105, atk: 150, def: 90, spa: 150, spd: 90, spe: 95 }, learnset: { 1: ['용의숨결'], 35: ['에어슬래시'], 55: ['역린'], 75: ['신속'] } },
+  389: { name: '토대부기', gen: 4, types: ['풀', '땅'], starter: true, stats: { hp: 95, atk: 109, def: 105, spa: 75, spd: 85, spe: 56 }, learnset: { 1: ['몸통박치기', '잎날가르기'], 18: ['물기'], 32: ['지진'], 45: ['깨물어부수기'], 55: ['리프스톰'] } },
+  392: { name: '초염몽', gen: 4, types: ['불꽃', '격투'], starter: true, stats: { hp: 76, atk: 104, def: 71, spa: 104, spd: 71, spe: 108 }, learnset: { 1: ['할퀴기', '불꽃세례'], 14: ['마하펀치'], 29: ['화염자동차'], 41: ['인파이트'], 53: ['플레어드라이브'] } },
+  395: { name: '엠페르트', gen: 4, types: ['물', '강철'], starter: true, stats: { hp: 84, atk: 86, def: 88, spa: 111, spd: 101, spe: 60 }, learnset: { 1: ['몸통박치기', '거품광선'], 16: ['메탈크로우'], 30: ['아쿠아제트'], 42: ['러스터캐논'], 52: ['하이드로펌프'] } },
+  405: { name: '렌트라', gen: 4, types: ['전기'], stats: { hp: 80, atk: 120, def: 79, spa: 95, spd: 79, spe: 70 }, learnset: { 1: ['몸통박치기', '전기쇼크'], 18: ['스파크'], 28: ['번개엄니'], 40: ['깨물어부수기'], 50: ['번개'] } },
+  445: { name: '한카리아스', gen: 4, types: ['드래곤', '땅'], boss: true, stats: { hp: 108, atk: 130, def: 95, spa: 80, spd: 85, spe: 102 }, learnset: { 1: ['몸통박치기', '용의숨결'], 28: ['구멍파기'], 38: ['드래곤크루'], 48: ['지진'], 58: ['역린'] } },
+  448: { name: '루카리오', gen: 4, types: ['격투', '강철'], stats: { hp: 70, atk: 110, def: 70, spa: 115, spd: 70, spe: 90 }, learnset: { 1: ['전광석화', '메탈크로우'], 24: ['깨트리다'], 37: ['파동탄'], 47: ['인파이트'], 55: ['신속'] } },
+  468: { name: '토게키스', gen: 4, types: ['노말', '비행'], stats: { hp: 85, atk: 50, def: 95, spa: 120, spd: 115, spe: 80 }, learnset: { 1: ['바람일으키기'], 25: ['에어슬래시'], 38: ['파동탄'], 48: ['신속'] } },
+  483: { name: '디아루가', gen: 4, types: ['강철', '드래곤'], boss: true, stats: { hp: 100, atk: 120, def: 120, spa: 150, spd: 100, spe: 90 }, learnset: { 1: ['용의숨결', '메탈크로우'], 35: ['러스터캐논'], 55: ['대지의힘'], 75: ['시간의포효'] } },
+  484: { name: '펄기아', gen: 4, types: ['물', '드래곤'], boss: true, stats: { hp: 90, atk: 120, def: 100, spa: 150, spd: 120, spe: 100 }, learnset: { 1: ['용의숨결', '거품광선'], 35: ['파도타기'], 55: ['파동탄'], 75: ['공간절단'] } },
+  487: { name: '기라티나', gen: 4, types: ['고스트', '드래곤'], boss: true, stats: { hp: 150, atk: 100, def: 120, spa: 100, spd: 120, spe: 90 }, learnset: { 1: ['용의숨결'], 35: ['섀도크루'], 55: ['용의파동'], 75: ['섀도다이브'] } }
+};
+
+// ==========================================
+// 2. 계정 및 세이브 데이터베이스 시스템
+// ==========================================
+let currentUser = null;
+let state = {
+  wave: 1,
+  money: 3000,
+  party: [],
+  activeIdx: 0,
+  enemy: null,
+  isBusy: false
+};
+
+function getDBKey(key) {
+  return `poke_db_${currentUser}_${key}`;
+}
+
+function loginUser() {
+  const input = document.getElementById('username-input').value.trim();
+  if (!input) {
+    alert('트레이너 닉네임을 입력해주세요!');
+    return;
+  }
+  currentUser = input;
+  document.getElementById('user-display').innerText = `[트레이너: ${currentUser}]`;
+  
+  if (!localStorage.getItem(getDBKey('unlocked'))) {
+    let defaults = [];
+    Object.entries(POKEDEX).forEach(([id, data]) => {
+      if (data.starter) defaults.push(Number(id));
+    });
+    localStorage.setItem(getDBKey('unlocked'), JSON.stringify(defaults));
+  }
+
+  document.getElementById('auth-screen').classList.remove('active');
+  document.getElementById('starter-screen').classList.add('active');
+  checkSavedGame();
+  renderStarterList();
+}
+
+function logoutUser() {
+  currentUser = null;
+  document.getElementById('starter-screen').classList.remove('active');
+  document.getElementById('auth-screen').classList.add('active');
+}
+
+function goToHome() {
+  if (confirm('현재 진행 상황이 자동 저장되어 있습니다. 처음 화면(로그인 화면)으로 돌아가시겠습니까?')) {
+    manualSave(); // 나가기 전 안전 저장
+    document.getElementById('battle-screen').classList.remove('active');
+    document.getElementById('auth-screen').classList.add('active');
+    document.getElementById('user-display').innerText = '';
+  }
+}
+
+function getUnlockedStarters() {
+  let saved = localStorage.getItem(getDBKey('unlocked'));
+  return saved ? JSON.parse(saved) : [];
+}
+
+function unlockStarter(dexId) {
+  let unlocked = getUnlockedStarters();
+  if (!unlocked.includes(dexId)) {
+    unlocked.push(dexId);
+    localStorage.setItem(getDBKey('unlocked'), JSON.stringify(unlocked));
+  }
+}
+
+function autoSave() {
+  const saveData = {
+    wave: state.wave,
+    money: state.money,
+    party: state.party,
+    activeIdx: state.activeIdx
+  };
+  localStorage.setItem(getDBKey('save'), JSON.stringify(saveData));
+  log(`<span style="color:#3498db;">[자동 저장] ${state.wave}층 진행 상황이 저장되었습니다.</span>`);
+}
+
+function manualSave() {
+  const saveData = {
+    wave: state.wave,
+    money: state.money,
+    party: state.party,
+    activeIdx: state.activeIdx
+  };
+  localStorage.setItem(getDBKey('save'), JSON.stringify(saveData));
+  log(`<span style="color:#2ecc71;">[수동 저장 완료] 현재 ${state.wave}층 기록이 저장되었습니다!</span>`);
+}
+
+function checkSavedGame() {
+  const saved = localStorage.getItem(getDBKey('save'));
+  const btn = document.getElementById('btn-continue');
+  if (saved) {
+    const data = JSON.parse(saved);
+    document.getElementById('saved-wave-text').innerText = data.wave;
+    btn.style.display = 'block';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function createPokemon(dexId, level) {
+  const base = POKEDEX[dexId];
+  const calcHP = (b, lv) => Math.floor(((b * 2 + 15) * lv) / 100) + lv + 10;
+  const calcStat = (b, lv) => Math.floor(((b * 2 + 15) * lv) / 100) + 5;
+
+  let learned = [];
+  const levels = Object.keys(base.learnset).map(Number).sort((a, b) => a - b);
+  for (const lv of levels) {
+    if (lv <= level) {
+      for (const m of base.learnset[lv]) {
+        if (!learned.includes(m)) {
+          if (learned.length >= 4) learned.shift();
+          learned.push(m);
+        }
+      }
+    }
+  }
+
+  const maxHp = calcHP(base.stats.hp, level);
+  return {
+    dexId,
+    name: base.name,
+    types: [...base.types],
+    level,
+    exp: 0,
+    nextExp: level * level * 15,
+    maxHp,
+    hp: maxHp,
+    atk: calcStat(base.stats.atk, level),
+    def: calcStat(base.stats.def, level),
+    spa: calcStat(base.stats.spa, level),
+    spd: calcStat(base.stats.spd, level),
+    spe: calcStat(base.stats.spe, level),
+    moves: learned
+  };
+}
+
+function recalculateStats(poke) {
+  const base = POKEDEX[poke.dexId];
+  const oldMax = poke.maxHp;
+  poke.maxHp = Math.floor(((base.stats.hp * 2 + 15) * poke.level) / 100) + poke.level + 10;
+  poke.hp += (poke.maxHp - oldMax);
+  poke.atk = Math.floor(((base.stats.atk * 2 + 15) * poke.level) / 100) + 5;
+  poke.def = Math.floor(((base.stats.def * 2 + 15) * poke.level) / 100) + 5;
+  poke.spa = Math.floor(((base.stats.spa * 2 + 15) * poke.level) / 100) + 5;
+  poke.spd = Math.floor(((base.stats.spd * 2 + 15) * poke.level) / 100) + 5;
+  poke.spe = Math.floor(((base.stats.spe * 2 + 15) * poke.level) / 100) + 5;
+}
+
+function getSpriteUrl(dexId, isBack = false) {
+  const dir = isBack ? 'back/' : '';
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dir}${dexId}.png`;
+}
+
+// ==========================================
+// 3. 스타팅 선택 및 게임 시작
+// ==========================================
+function renderStarterList() {
+  const list = document.getElementById('starter-list');
+  list.innerHTML = '';
+  const unlocked = getUnlockedStarters();
+
+  Object.entries(POKEDEX).forEach(([id, data]) => {
+    const dexNum = Number(id);
+    const isUnlocked = unlocked.includes(dexNum);
+
+    const card = document.createElement('div');
+    card.className = isUnlocked ? 'starter-card' : 'starter-card locked';
+    card.innerHTML = `
+      <div style="font-size:11px; color:#aaa;">${data.gen}세대 ${isUnlocked ? '' : '🔒 (미해제)'}</div>
+      <img src="${getSpriteUrl(id)}" alt="${data.name}">
+      <div><strong>${data.name}</strong></div>
+      <div class="types" style="justify-content:center; margin-top:4px;">
+        ${data.types.map(t => `<span class="type-badge" style="background:${TYPE_COLORS[t]}">${t}</span>`).join('')}
+      </div>
+    `;
+
+    if (isUnlocked) {
+      card.onclick = () => startNewRunStarter(dexNum);
+    }
+    list.appendChild(card);
+  });
+}
+
+function startNewRun() {
+  alert('원하는 스타팅 포켓몬을 아래 목록에서 클릭하세요!');
+}
+
+function startNewRunStarter(starterId) {
+  state.party = [createPokemon(starterId, 5)];
+  state.activeIdx = 0;
+  state.wave = 1;
+  state.money = 3000;
+
+  localStorage.removeItem(getDBKey('save'));
+
+  document.getElementById('starter-screen').classList.remove('active');
+  document.getElementById('battle-screen').classList.add('active');
+  spawnWave();
+}
+
+function continueGame() {
+  const saved = localStorage.getItem(getDBKey('save'));
+  if (!saved) return;
+  const data = JSON.parse(saved);
+  state.wave = data.wave;
+  state.money = data.money;
+  state.party = data.party;
+  state.activeIdx = data.activeIdx;
+
+  document.getElementById('starter-screen').classList.remove('active');
+  document.getElementById('battle-screen').classList.add('active');
+  spawnWave();
+}
+
+function log(msg) {
+  const box = document.getElementById('log-box');
+  box.innerHTML += `<div>▶ ${msg}</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+// ==========================================
+// 4. 웨이브 및 배틀 진행
+// ==========================================
+function spawnWave() {
+  if (state.wave > 200) {
+    alert('축하합니다! 200층 모든 웨이브를 정복했습니다!');
+    location.reload();
+    return;
+  }
+
+  autoSave();
+
+  const isBoss = (state.wave % 10 === 0);
+  const waveEl = document.getElementById('wave-display');
+  waveEl.innerText = isBoss ? `★ ${state.wave}층 BOSS ★` : `${state.wave}층 / 200층`;
+  waveEl.className = isBoss ? 'wave-badge boss-alert' : 'wave-badge';
+
+  const allIds = Object.keys(POKEDEX).map(Number);
+  const normalIds = allIds.filter(id => !POKEDEX[id].boss);
+
+  const earlyBosses = [59, 130, 143];
+  const midBosses = [149, 248, 373, 376, 445];
+  const lateBosses = [150, 249, 250, 382, 383, 384, 483, 484, 487];
+
+  let enemyId, enemyLv;
+  if (isBoss) {
+    const bossTier = Math.floor(state.wave / 10) - 1;
+    if (state.wave <= 30) {
+      enemyId = earlyBosses[bossTier % earlyBosses.length];
+      enemyLv = Math.floor(state.wave * 0.5) + 3;
+    } else if (state.wave <= 80) {
+      enemyId = midBosses[(bossTier - 3) % midBosses.length];
+      enemyLv = Math.min(100, Math.floor(state.wave * 0.52) + 4);
+    } else {
+      enemyId = lateBosses[(bossTier - 8) % lateBosses.length];
+      enemyLv = Math.min(100, Math.floor(state.wave * 0.55) + 5);
+    }
+  } else {
+    enemyId = normalIds[Math.floor(Math.random() * normalIds.length)];
+    enemyLv = Math.min(100, Math.floor(state.wave * 0.5) + 3);
+  }
+
+  state.enemy = createPokemon(enemyId, enemyLv);
+  if (isBoss) {
+    const hpMult = state.wave <= 30 ? 1.0 : (state.wave <= 80 ? 1.25 : 1.5);
+    state.enemy.maxHp = Math.floor(state.enemy.maxHp * hpMult);
+    state.enemy.hp = state.enemy.maxHp;
+  }
+
+  if (isBoss) {
+    log(`<span style="color:#f39c12; font-weight:bold;">[보스 출현!] ${state.wave}층의 수호자 ${state.enemy.name}(Lv.${enemyLv})가 나타났다!</span>`);
+  } else {
+    log(`야생의 ${state.enemy.name}(Lv.${enemyLv})이(가) 나타났다!`);
+  }
+
+  document.getElementById('btn-catch').disabled = isBoss;
+  state.isBusy = false;
+  updateUI();
+}
+
+function updateUI() {
+  const p = state.party[state.activeIdx];
+  const e = state.enemy;
+
+  document.getElementById('money-display').innerText = `소지금: ${state.money}원`;
+  document.getElementById('party-count').innerText = state.party.length;
+
+  document.getElementById('enemy-name').innerText = e.name;
+  document.getElementById('enemy-lv').innerText = `Lv.${e.level}`;
+  document.getElementById('enemy-types').innerHTML = e.types.map(t =>
+    `<span class="type-badge" style="background:${TYPE_COLORS[t]}">${t}</span>`).join('');
+  document.getElementById('enemy-hp-text').innerText = `${Math.max(0, e.hp)}/${e.maxHp}`;
+  const ePct = Math.max(0, (e.hp / e.maxHp) * 100);
+  const eBar = document.getElementById('enemy-hp-bar');
+  eBar.style.width = `${ePct}%`;
+  eBar.style.backgroundColor = ePct > 50 ? '#2ecc71' : ePct > 20 ? '#f1c40f' : '#e74c3c';
+  document.getElementById('enemy-sprite').src = getSpriteUrl(e.dexId, false);
+
+  document.getElementById('player-name').innerText = p.name;
+  document.getElementById('player-lv').innerText = `Lv.${p.level}`;
+  document.getElementById('player-types').innerHTML = p.types.map(t =>
+    `<span class="type-badge" style="background:${TYPE_COLORS[t]}">${t}</span>`).join('');
+  document.getElementById('player-hp-text').innerText = `${Math.max(0, p.hp)}/${p.maxHp}`;
+  const pPct = Math.max(0, (p.hp / p.maxHp) * 100);
+  const pBar = document.getElementById('player-hp-bar');
+  pBar.style.width = `${pPct}%`;
+  pBar.style.backgroundColor = pPct > 50 ? '#2ecc71' : pPct > 20 ? '#f1c40f' : '#e74c3c';
+  document.getElementById('player-exp-bar').style.width = `${Math.min(100, (p.exp / p.nextExp) * 100)}%`;
+  document.getElementById('player-sprite').src = getSpriteUrl(p.dexId, true);
+
+  const movesDiv = document.getElementById('moves-container');
+  movesDiv.innerHTML = '';
+  p.moves.forEach(mName => {
+    const m = MOVES[mName];
+    const eff = getTypeEffectiveness(m.type, e.types);
+    let effText = '';
+    if (eff > 1) effText = ' (효과 굉장!)';
+    else if (eff === 0) effText = ' (효과 없음)';
+    else if (eff < 1) effText = ' (효과 별로)';
+
+    const btn = document.createElement('button');
+    btn.className = 'move-btn';
+    btn.style.backgroundColor = TYPE_COLORS[m.type];
+    btn.disabled = state.isBusy;
+    btn.innerHTML = `
+      <span>${mName} <small>[${m.type}/${m.cat}]</small></span>
+      <small>위력: ${m.power} | 명중: ${m.acc}${effText}</small>
+    `;
+    btn.onclick = () => executeTurn(mName);
+    movesDiv.appendChild(btn);
+  });
+}
+
+function calculateDamage(attacker, defender, moveName) {
+  const move = MOVES[moveName];
+  if (Math.random() * 100 > move.acc) return { damage: 0, missed: true, eff: 1 };
+
+  const eff = getTypeEffectiveness(move.type, defender.types);
+  if (eff === 0) return { damage: 0, missed: false, eff: 0 };
+
+  const A = move.cat === '물리' ? attacker.atk : attacker.spa;
+  const D = move.cat === '물리' ? defender.def : defender.spd;
+  const stab = attacker.types.includes(move.type) ? 1.5 : 1.0;
+  const random = (Math.floor(Math.random() * 16) + 85) / 100;
+
+  let dmg = Math.floor((((2 * attacker.level / 5 + 2) * move.power * (A / D)) / 50 + 2) * stab * eff * random);
+  return { damage: Math.max(1, dmg), missed: false, eff };
+}
+
+async function executeTurn(playerMoveName) {
+  if (state.isBusy) return;
+  state.isBusy = true;
+  updateUI();
+
+  const p = state.party[state.activeIdx];
+  const e = state.enemy;
+  const enemyMoveName = e.moves[Math.floor(Math.random() * e.moves.length)];
+
+  const playerFirst = p.spe >= e.spe;
+
+  if (playerFirst) {
+    await performAttack(p, e, playerMoveName, true);
+    if (e.hp > 0) await performAttack(e, p, enemyMoveName, false);
+  } else {
+    await performAttack(e, p, enemyMoveName, false);
+    if (p.hp > 0) await performAttack(p, e, playerMoveName, true);
+  }
+
+  await checkBattleEnd();
+}
+
+function performAttack(attacker, defender, moveName, isPlayer) {
+  return new Promise(resolve => {
+    const prefix = isPlayer ? `${attacker.name}의` : `적 ${attacker.name}의`;
+    log(`${prefix} <strong>${moveName}</strong>!`);
+
+    const res = calculateDamage(attacker, defender, moveName);
+    if (res.missed) {
+      log(`그러나 빗나갔다!`);
+    } else if (res.eff === 0) {
+      log(`${defender.name}에게는 효과가 없는 듯하다...`);
+    } else {
+      defender.hp = Math.max(0, defender.hp - res.damage);
+      if (res.eff > 1) log(`<span style="color:#2ecc71;">효과가 굉장했다!</span> (${res.damage} 데미지)`);
+      else if (res.eff < 1) log(`<span style="color:#95a5a6;">효과가 별로인 듯하다...</span> (${res.damage} 데미지)`);
+      else log(`${res.damage}의 데미지를 입혔다!`);
+    }
+
+    updateUI();
+    setTimeout(resolve, 700);
+  });
+}
+
+async function checkBattleEnd() {
+  const p = state.party[state.activeIdx];
+  const e = state.enemy;
+
+  if (e.hp <= 0) {
+    log(`<strong>적 ${e.name}은(는) 쓰러졌다!</strong>`);
+    
+    const isBossWave = (state.wave % 10 === 0);
+    const baseReward = 200 + (state.wave * 80);
+    const rewardMoney = isBossWave ? baseReward * 3 : baseReward;
+    
+    state.money += rewardMoney;
+    log(`<span style="color:#f1c40f;">상금 ${rewardMoney}원을 획득했다!</span>`);
+
+    const gainedExp = e.level * (isBossWave ? 45 : 22);
+    await gainExp(p, gainedExp);
+
+    state.party.forEach(poke => {
+      if (poke.hp > 0) poke.hp = Math.min(poke.maxHp, poke.hp + Math.floor(poke.maxHp * 0.2));
+    });
+
+    state.wave++;
+    setTimeout(spawnWave, 1000);
+  } else if (p.hp <= 0) {
+    log(`<span style="color:#e74c3c;">${p.name}은(는) 쓰러졌다!</span>`);
+    const aliveIdx = state.party.findIndex(poke => poke.hp > 0);
+    if (aliveIdx === -1) {
+      alert(`게임 오버! 최종 도달 층수: ${state.wave}층`);
+      localStorage.removeItem(getDBKey('save'));
+      location.reload();
+    } else {
+      openPartyModal(true);
+    }
+  } else {
+    state.isBusy = false;
+    updateUI();
+  }
+}
+
+async function gainExp(poke, amount) {
+  if (poke.level >= 100) return;
+  poke.exp += amount;
+  log(`${poke.name}은(는) ${amount} 경험치를 얻었다!`);
+
+  while (poke.exp >= poke.nextExp && poke.level < 100) {
+    poke.exp -= poke.nextExp;
+    poke.level++;
+    poke.nextExp = poke.level * poke.level * 15;
+    recalculateStats(poke);
+    log(`<span style="color:#3498db; font-weight:bold;">레벨 업! ${poke.name}은(는) Lv.${poke.level}이(가) 되었다!</span>`);
+    updateUI();
+
+    const learnset = POKEDEX[poke.dexId].learnset;
+    if (learnset[poke.level]) {
+      for (const newMove of learnset[poke.level]) {
+        if (!poke.moves.includes(newMove)) {
+          await handleLearnMove(poke, newMove);
+        }
+      }
+    }
+  }
+}
+
+function handleLearnMove(poke, newMove) {
+  return new Promise(resolve => {
+    if (poke.moves.length < 4) {
+      poke.moves.push(newMove);
+      log(`<span style="color:#f1c40f;">${poke.name}은(는) 새로 <strong>${newMove}</strong>을(를) 배웠다!</span>`);
+      updateUI();
+      resolve();
+    } else {
+      const modal = document.getElementById('modal');
+      document.getElementById('modal-title').innerText = `새 기술 습득: ${newMove}`;
+      const mInfo = MOVES[newMove];
+      document.getElementById('modal-desc').innerText =
+        `${poke.name}이(가) ${newMove} [${mInfo.type}/${mInfo.cat}, 위력:${mInfo.power}]을(를) 배우려 합니다. 잊을 기술을 선택하세요.`;
+
+      const list = document.getElementById('modal-list');
+      list.innerHTML = '';
+
+      poke.moves.forEach((oldMove, idx) => {
+        const om = MOVES[oldMove];
+        const btn = document.createElement('button');
+        btn.style.background = TYPE_COLORS[om.type];
+        btn.style.color = '#fff';
+        btn.innerText = `${oldMove} [${om.type}/${om.cat}, 위력:${om.power}] 잊기`;
+        btn.onclick = () => {
+          poke.moves[idx] = newMove;
+          log(`${poke.name}은(는) ${oldMove}을(를) 잊고 <strong>${newMove}</strong>을(를) 배웠다!`);
+          modal.style.display = 'none';
+          updateUI();
+          resolve();
+        };
+        list.appendChild(btn);
+      });
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.style.background = '#555';
+      cancelBtn.style.color = '#fff';
+      cancelBtn.innerText = `${newMove} 습득 포기하기`;
+      cancelBtn.onclick = () => {
+        log(`${poke.name}은(는) ${newMove}을(를) 배우지 않았다.`);
+        modal.style.display = 'none';
+        resolve();
+      };
+      list.appendChild(cancelBtn);
+
+      modal.style.display = 'flex';
+    }
+  });
+}
+
+function usePotion() {
+  if (state.isBusy) return;
+  if (state.money < 500) { log('소지금이 부족합니다! (500원 필요)'); return; }
+  const p = state.party[state.activeIdx];
+  if (p.hp >= p.maxHp) { log('이미 체력이 가득 차 있습니다.'); return; }
+
+  state.money -= 500;
+  const heal = Math.floor(p.maxHp * 0.5);
+  p.hp = Math.min(p.maxHp, p.hp + heal);
+  log(`상처약을 사용해 ${p.name}의 체력을 ${heal} 회복했다!`);
+  updateUI();
+}
+
+async function throwPokeball() {
+  if (state.isBusy) return;
+  if (state.party.length >= 6) { log('지닌 포켓몬이 이미 6마리입니다!'); return; }
+  if (state.money < 300) { log('소지금이 부족합니다! (300원 필요)'); return; }
+
+  state.isBusy = true;
+  state.money -= 300;
+  updateUI();
+
+  const e = state.enemy;
+  log(`몬스터볼을 던졌다!`);
+
+  const hpRatio = e.hp / e.maxHp;
+  const catchChance = Math.max(0.15, (1 - hpRatio * 0.8));
+
+  await new Promise(r => setTimeout(r, 800));
+  if (Math.random() < catchChance) {
+    log(`<span style="color:#f1c40f; font-weight:bold;">신난다! ${e.name}을(를) 잡았다!</span>`);
+    unlockStarter(e.dexId);
+    state.party.push(e);
+    state.wave++;
+    setTimeout(spawnWave, 1000);
+  } else {
+    log(`아깝다! 볼에서 튀어나왔다!`);
+    const p = state.party[state.activeIdx];
+    const enemyMoveName = e.moves[Math.floor(Math.random() * e.moves.length)];
+    await performAttack(e, p, enemyMoveName, false);
+    await checkBattleEnd();
+  }
+}
+
+function openPartyModal(forced) {
+  if (!forced && state.isBusy) return;
+  const modal = document.getElementById('modal');
+  document.getElementById('modal-title').innerText = '포켓몬 교체';
+  document.getElementById('modal-desc').innerText = '전투에 내보낼 포켓몬을 선택하세요.';
+
+  const list = document.getElementById('modal-list');
+  list.innerHTML = '';
+
+  state.party.forEach((poke, idx) => {
+    const btn = document.createElement('button');
+    btn.style.background = idx === state.activeIdx ? '#2c3e50' : '#0f3460';
+    btn.style.color = '#fff';
+    btn.style.border = '1px solid #e94560';
+    btn.disabled = (poke.hp <= 0 || idx === state.activeIdx);
+    btn.innerText = `${poke.name} (Lv.${poke.level}) - HP: ${poke.hp}/${poke.maxHp}`;
+    btn.onclick = () => {
+      state.activeIdx = idx;
+      modal.style.display = 'none';
+      log(`가랏! ${poke.name}!`);
+      state.isBusy = false;
+      updateUI();
+    };
+    list.appendChild(btn);
+  });
+
+  if (!forced) {
+    const closeBtn = document.createElement('button');
+    closeBtn.style.background = '#555';
+    closeBtn.style.color = '#fff';
+    closeBtn.innerText = '닫기';
+    closeBtn.onclick = () => { modal.style.display = 'none'; };
+    list.appendChild(closeBtn);
+  }
+
+  modal.style.display = 'flex';
+}
+</script>
+</body>
+</html>
